@@ -255,3 +255,186 @@ obj-$(CONFIG_FS_FAT) += fat/
 
 
 
+
+
+最终版本的 uboot 包含 
+
+
+mx6ull_14x14_evk_defconfig：
+	
+uboot-dtb.bin 
+	uboot-nodtb.bin
+		uboot ( 将 head-y 与 子目录 链接 起来， 生成 uboot)
+			head-y
+				arch/arm/cpu/armv7/start.o
+			子目录
+				lib
+				fs
+				net
+				dirvers/
+				dirvers/gpio/
+				dirvers/serial/
+				dirvers/i2c/
+				dirvers/usb/
+
+
+	dt.dtb(设备树， 由 两个决定 ： 芯片相关、 板厂相关)
+		芯片相关： mx6ull.dtsi
+		板厂相关： mx6ull_14x14_evk.dts
+			设备树编译： dtc -I dts -O dtb -o mx6ull_14x14_evk.dtb mx6ull_14x14_evk.dts
+			设备树查看： dtc -I dtb -O dts -o mx6ull_14x14_evk.dts mx6ull_14x14_evk.dtb
+		find -name imx6ull-14x14-evk.dts 查找设备树
+
+
+最后要对  uboot-dtb.bin   进一步处理， 生成 u-boot.bin
+
+对于 imx6ull 芯片 ，要加上 cfg( DDR 相关的配置文件 ) = u-boot-dtb.imx 文件
+
+对于 stm32mp157 芯片 ，要加上 头部信息 = u-boot.stm32 文件
+
+
+
+
+在 
+
+
+
+
+
+
+
+# XIP 概念
+execute in place ； 在芯片内部执行；
+
+flash 看上去是在 芯片内部执行，实际上 在 cpu 读取了指令 ，在 cpu 内部执行； xip 设备 是可以 直接 被 cpu 读取指令执行的；
+
+Arm cpu： 一上电 从 0 取值运行， 读取指令 在 cpu内执行，
+	外设 一定可以接收 cpu 发送的 地址 0 信号， 返回数据给 cpu， cpu 执行指令
+
+如果 soc内 有 Nand Flash（控制器）， 并且 Nand flash 外挂载 一个 32G 的 Nand flash ，则 cpu 通过 中间的 Nand flash 控制器， 读取 32G Nand flash 的数据， 但是 cpu 只能 发送数据给 Nand flash 控制器；
+但是 cpu 需要 通过复杂的指令才能发送数据给 Nand flash 控制器，控制  Nand flash 控制器 读到 flash 的第一条 指令， 返回给 cpu， cpu 执行指令；
+所以 cpu 得到第一条 指令 来自于  ROM， 使用 BootRom 里面的 程序 发送 复杂指令给  Nand Flash（控制器）， 读取 32G Nand flash 的数据， 返回给 cpu， cpu 执行指令；
+
+
+芯片有  bootpin 根据引脚 决定 从哪里启动， 从 ROM 启动， 从 Nand Flash 启动， 从 SD 卡启动， 从 eMMC 启动， 从 USB 启动；
+零一种方式 bootpin 控制 启动顺序  ， 1 ROM ， 2 Nand Flash ， 3 SD ，4 eMMC ， 5 USB ； 只控制 顺序 1、2、3、4、5 或者 5、4、3、2、1
+
+
+
+
+
+
+
+
+
+
+
+
+# uboot  dirve model 驱动模型
+
+
+U_BOOT_DRIVER(ddr_driver) = {
+    .name   = "ddr_driver",
+    .id     = UCLASS_RAM,  // 或自定义类别
+    .of_match = ddr_ids,
+    .probe  = ddr_probe,
+    .priv_auto_alloc_size = sizeof(struct ddr_priv),
+};
+
+of_match：使用设备树的兼容性字符串来匹配设备树中的节点。确保您的设备树中有对应的 DDR 设备节点，例如 compatible = "myvendor,my_ddr";。
+
+probe 函数中，驱动程序会初始化设备并为设备分配资源。具体来说，它可能会映射设备的控制寄存器的内存地址，配置硬件，设置中断，以及其他相关的初始化任务。
+
+
+
+u-boot 的 dm 树构建分三次构建，前两次使用uboot-dts构建， 最后一次使用 kernel 的 dtb 构建设备树；
+
+第一次构建在  board_init_f() 函数中，使用 uboot-dts 构建设备树；在 uboot 重定位之前， 代码在 /u-boot/common/board_f.c 中，代码主要是执行 initcall_run_list(init_sequence_f) ， init_sequence_f是一个数组，它里面都是函数名，这些函数名在编译的时候，会被链接到一起，生成一个数组，这个数组在 uboot 重定位之前，会被执行；执行完成后 uboot 重定位之前的 初始化执行完了
+	init_sequence_f 
+		1、 fdtdec_setup 
+		2、	CONFIG_OF_SEPARATE // uboot 镜像的 封装格式 是不是 dtb 在 后面
+		3、 CONFIG_SPL 是否由 SPL 的部分
+		4、	把 end 地址复制给 fdt blob 全局变量 的值，，end 是 uboot 结束地址， fdt blob 全局变量 是 uboot 的 dtb 的起始地址
+		5、 lds 镜像的 清单， 
+		6、 end 是 uboot 结束地址， fdt blob 全局变量 是 uboot 的 dtb 的起始地址
+		7、 initf_dm  加载树
+			a: dm_init_and_scan // 初始化 dm 树，扫描设备树，构建 dm 树; 构建树的根节点，根节点是 gd->dm_root_f
+				dm_init； 创建根节点
+				最终放在  DM_ROOT_NON_CONST  (((gd_t *)gd)->dm_root) 中
+				DM_UCLASS_ROOT_NON_CONST 是 比如说 都是 usb 设备那么时候 同一个 usb 根节点 抽象出类
+				设备树根节点的名字 是 root dirver
+
+		8、 系统会选择 比较大的树，也是 重定向后的树， 也就是 gd->dm_root_r
+
+		
+			
+
+
+第二次构建在  board_init_r() 函数中，使用 uboot-dts 构建设备树；在重定位之后执行
+
+第三次构建在  board_init_r() 函数中，使用 kernel 的 dtb 构建设备树；
+经过三次构建，整个 uboot 中由两颗设备驱动模型树，第一颗 被保存在 gd->dm_root_f , 第二颗 被保存在 gd->dm_root_r 中, 第三次构建的设备树被保存在 gd->dm_root 中；
+
+
+
+spl 做的 是最基础硬件的初始化，时钟、内存 等，
+其他的由 uboot 来完成
+
+uboot 要把自己从 从 内存 的某个位置，拷贝到 0 地址，然后 执行；
+剩下来的 空间安装 linux kernel，设备树，文件系统；仅为 linux 比较大，所以要储存的位置 尽可能 复制到 较远的位置 ， 高端
+	编译的，生成 object  要拼装到一起，生成 可执行文件，链接的主要 过程就是 地址的 重运算， 这些地址 是 ： 函数的地址 、变量名的地址；通过函数名 找到函数的位置
+	 所以把 kernel 复制到高端的时候 要做重定位，这个过程是 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 当前遇到的问题
+1、 首先我要在 rpi 上运行 uboot ，能不能成功 
+	a:尝试 编译 rpi 3b+ uboot ，但是 openssl 可能要升级到 11
+	b: 使用 uart 连接 rpi，测试一下，看看是否可以成功
+
+2、uboot 
+	a: uboot 里面怎么写驱动，怎么测试，怎么调试
+		1、如果 板子上添加下 DDR 那么 uboot 怎么添加驱动，去初始化 DDR
+	b：uboot 如何写设备树
+	c: 如何启动linux内核
+
+3、linux 的 内核 如何编译
+	a:内核编译
+	b:设备树
+		1、如果板子上有DDR 如何使用DDR，设备树如何写，内核如何使用设备树
+	d:跟文件系统
+
+
+4、板子上的外设
+	a: DDR
+	b: sd card
+	c: eMMC
+	d: type-c (全功能 Thunderbolt 4  \ USB4 )
+	e: oled (可选)
+	f: wifi
+	g: blue tooth (可选)
+	f: usb
+
