@@ -211,9 +211,14 @@ arm-linux-gnueabihf-gcc --version
 
 
 如果需要 64 位支持
-  wget https://releases.linaro.org/components/toolchain/binaries/latest-7/aarch64-linux-gnu/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz
+	wget https://releases.linaro.org/components/toolchain/binaries/latest-7/aarch64-linux-gnu/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz
 
- 
+	export PATH=$PATH:/home/kingnan/TEMP/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin:$PATH
+	aarch64-linux-gnu-gcc --version
+
+
+
+
 
 # 编译
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- mx6ull_14x14_evk_defconfig
@@ -385,7 +390,7 @@ uboot 要把自己从 从 内存 的某个位置，拷贝到 0 地址，然后 �
 	编译的，生成 object  要拼装到一起，生成 可执行文件，链接的主要 过程就是 地址的 重运算， 这些地址 是 ： 函数的地址 、变量名的地址；通过函数名 找到函数的位置
 	 所以把 kernel 复制到高端的时候 要做重定位，这个过程是 
 
-
+``
 
 
 
@@ -438,3 +443,88 @@ uboot 要把自己从 从 内存 的某个位置，拷贝到 0 地址，然后 �
 	g: blue tooth (可选)
 	f: usb
 
+
+
+
+# 安装 openss l.1.1
+wget https://www.openssl.org/source/openssl-1.1.1u.tar.gz
+# 配置安装选项
+./config --prefix=/usr/local/openssl --openssldir=/usr/local/openssl shared zlib
+ # 编译 
+ make
+# 安装
+ sudo make install
+export PATH=/usr/local/openssl/bin:$PATH
+openssl version
+
+
+
+
+
+
+
+
+
+
+
+
+#  rpi 没办法使用 32 位 ， 所以没用
+32 位
+arm-linux-gnueabihf-gcc --version
+export PATH=/home/kingnan/TEMP/gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabihf/bin:$PATH
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- distclean
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- rpi_3_32b_defconfig
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- V=1 
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- clean
+
+
+
+
+
+
+
+
+64 位
+aarch64-linux-gnu-gcc --version
+export CROSS_COMPILE=aarch64-linux-gnu-
+export ARCH=arm64
+
+
+make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- distclean
+make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- rpi_3_b_plus_defconfig
+make ARCH=arm CROSS_COMPILE=aarch64-linux-gnu- V=1 
+make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- clean
+
+
+# 命令 查找 rpi 的相关 make 的 config
+cd configs/
+ls | grep rpi
+
+
+# 尝试 burn rpi3b+ uboot 到 sd card
+典型分区方案：
+	引导分区：用于存储 U-Boot 和内核镜像。这通常是一个 FAT32 文件系统，这样 U-Boot 可以容易地读取文件。
+	根文件系统分区：使用 ext4 等文件系统，存储完整的 Linux 系统内容； 根文件系统（通常是 ext4 或 FAT 文件系统）
+
+
+1、列出 SD 卡 ： lsblk
+2、sudo fdisk /dev/sdX  # 将 sdX 替换为您的 SD 卡设备名
+3、创建分区：
+	1、创建一个引导分区（例如 256MB，格式为 FAT32）
+	2、创建其他分区以存放文件系统内容（例如 ext4）
+4、格式化分区
+	sudo mkfs.vfat /dev/sda1  # 将引导分区格式化为 FAT32
+	sudo mkfs.ext4 /dev/sdX2  # 将根文件系统分区格式化为 ext4
+5、sudo dd if=uboot.bin of=/dev/sdX bs=1M status=progress
+6、如果  有 sdX1 那么 ：  sudo dd if=uboot.bin of=/dev/sdX1 bs=1M status=progress  # 烧录到引导分区
+7、
+
+sudo dd if=u-boot.bin of=/dev/sda1 bs=1M status=progress
+
+
+sudo mount /dev/sda1 /mnt
+sudo umount /mnt
+
+sudo minicom -D /dev/ttyUSB0 -b 115200
+sudo cp config.txt /mnt/
+sudo cp u-boot64.bin /mnt/
