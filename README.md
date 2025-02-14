@@ -508,13 +508,13 @@ ls | grep rpi
 
 
 1、列出 SD 卡 ： lsblk
-2、sudo fdisk /dev/sdX  # 将 sdX 替换为您的 SD 卡设备名
+2、sudo fdisk /dev/sdb  # 将 sdX 替换为您的 SD 卡设备名
 3、创建分区：
 	1、创建一个引导分区（例如 256MB，格式为 FAT32）
 	2、创建其他分区以存放文件系统内容（例如 ext4）
 4、格式化分区
-	sudo mkfs.vfat /dev/sda1  # 将引导分区格式化为 FAT32
-	sudo mkfs.ext4 /dev/sdX2  # 将根文件系统分区格式化为 ext4
+	sudo mkfs.vfat -F 32 /dev/sdb1  # 将引导分区格式化为 FAT32
+	sudo mkfs.ext4 /dev/sdb2  # 将根文件系统分区格式化为 ext4
 5、sudo dd if=uboot.bin of=/dev/sdX bs=1M status=progress
 6、如果  有 sdX1 那么 ：  sudo dd if=uboot.bin of=/dev/sdX1 bs=1M status=progress  # 烧录到引导分区
 7、
@@ -522,9 +522,35 @@ ls | grep rpi
 sudo dd if=u-boot.bin of=/dev/sda1 bs=1M status=progress
 
 
-sudo mount /dev/sda1 /mnt
-sudo umount /mnt
+sudo mount /dev/sdb1 /mnt/sdCard
+sudo umount /mnt/sdCard
 
 sudo minicom -D /dev/ttyUSB0 -b 115200
-sudo cp config.txt /mnt/
-sudo cp u-boot64.bin /mnt/
+sudo cp config.txt /mnt/sdCard
+sudo cp u-boot64.bin /mnt/sdCard
+
+sudo cp config.txt u-boot64.bin start.elf bootcode.bin /mnt/sdCard
+
+ sudo cp config.txt u-boot64.bin start.elf bootcode.bin fixup.dat /mnt/sdCard
+
+
+
+ sd卡 分区 
+
+ 在fdisk提示符下，输入以下命令：
+
+输入 o 创建一个新的空的DOS分区表（如果SD卡上已有分区表，可以跳过这一步）。
+输入 p 打印当前的分区表（确认没有现有分区，或者你准备删除它们）。
+输入 d 删除现有分区（如果有）。
+输入 n 创建新的分区。
+选择 p（主分区）。
+输入 1 为第一个分区（编号）。
+默认起始扇区，直接按回车。
+输入 +512M 设置第一个分区大小为512MB。
+输入 n 创建第二个分区。
+选择 p（主分区）。
+输入 2 为第二个分区（编号）。
+默认起始扇区，直接按回车。
+默认结束扇区（使用剩余空间）。
+输入 p 查看分区表，确认两个分区是否正确。
+输入 w 保存更改并退出fdisk。
