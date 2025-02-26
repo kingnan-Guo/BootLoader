@@ -1,6 +1,8 @@
 # BootLoader
 BootLoader
 
+https://gitlab.com/u-boot/u-boot.git
+
 
 # 可以打印出 make 的规则
 make -p -> 1.txt
